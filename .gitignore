@@ -1,0 +1,24 @@
+# Xcode
+build/
+DerivedData/
+*.xcworkspace
+!*.xcworkspace/contents.xcworkspacedata
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xcuserstate
+xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+
+# Model files (too large for git)
+models/*.gguf
+
+# macOS
+.DS_Store
+*.swp
+*~

@@ -1,0 +1,372 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0EF5F0A7D09591A844EC8DF4 /* GemmaChatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B207F2CD85633210FFEA839E /* GemmaChatApp.swift */; };
+		35C03FF0BCC7DEF24DB101F0 /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60D0BEA6428CC562BE8B8A7E /* MessageBubble.swift */; };
+		434F1C8A1E7E47C633A001B2 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC55261413C1D218C228973 /* ChatMessage.swift */; };
+		4931830E2F56D39E5A0149BC /* LlamaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF262539B31770450B0427D2 /* LlamaService.swift */; };
+		4EE2540DCE4B08B487E5BA30 /* InputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EA87EE3602AFDF40E17899F /* InputBar.swift */; };
+		9FAB898F1BE20CAE7B34DC8D /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 212C9030150A4483E72711EE /* ChatView.swift */; };
+		CCBFCB69EE6EBA9944C6F95B /* LlamaSwift in Frameworks */ = {isa = PBXBuildFile; productRef = E8BDD9D1277C86A402BFB994 /* LlamaSwift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		212C9030150A4483E72711EE /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		60D0BEA6428CC562BE8B8A7E /* MessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubble.swift; sourceTree = "<group>"; };
+		951FC02729110CD258C4E035 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		99D203A78BE71B7A78428056 /* GemmaChat.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GemmaChat.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9EA87EE3602AFDF40E17899F /* InputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputBar.swift; sourceTree = "<group>"; };
+		B207F2CD85633210FFEA839E /* GemmaChatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GemmaChatApp.swift; sourceTree = "<group>"; };
+		CCC55261413C1D218C228973 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
+		DF262539B31770450B0427D2 /* LlamaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LlamaService.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		87FD223E9328E882B51ECE9A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CCBFCB69EE6EBA9944C6F95B /* LlamaSwift in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		20B97DB073748D8AA78F3D84 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				99D203A78BE71B7A78428056 /* GemmaChat.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		2E3928FF741AEA0FC6A929E0 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				CCC55261413C1D218C228973 /* ChatMessage.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		3DA8B755C3483AE934AFD4A9 = {
+			isa = PBXGroup;
+			children = (
+				5C4C56DC43A4AF0066B869FA /* GemmaChat */,
+				20B97DB073748D8AA78F3D84 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5177EED4F2A34AF0A2FE9651 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				212C9030150A4483E72711EE /* ChatView.swift */,
+				9EA87EE3602AFDF40E17899F /* InputBar.swift */,
+				60D0BEA6428CC562BE8B8A7E /* MessageBubble.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		5C4C56DC43A4AF0066B869FA /* GemmaChat */ = {
+			isa = PBXGroup;
+			children = (
+				B207F2CD85633210FFEA839E /* GemmaChatApp.swift */,
+				951FC02729110CD258C4E035 /* Info.plist */,
+				2E3928FF741AEA0FC6A929E0 /* Models */,
+				89B94E966D8A68284D6FE60B /* Services */,
+				5177EED4F2A34AF0A2FE9651 /* Views */,
+			);
+			path = GemmaChat;
+			sourceTree = "<group>";
+		};
+		89B94E966D8A68284D6FE60B /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				DF262539B31770450B0427D2 /* LlamaService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		FE4756A868FB061E8E2BCAED /* GemmaChat */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 04184034176D3B68C329A079 /* Build configuration list for PBXNativeTarget "GemmaChat" */;
+			buildPhases = (
+				40BC2699CBA4970D3CF2A9FA /* Sources */,
+				87FD223E9328E882B51ECE9A /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GemmaChat;
+			packageProductDependencies = (
+				E8BDD9D1277C86A402BFB994 /* LlamaSwift */,
+			);
+			productName = GemmaChat;
+			productReference = 99D203A78BE71B7A78428056 /* GemmaChat.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		BDE7A0DFB1AE8E7D30DB3E75 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					FE4756A868FB061E8E2BCAED = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 69B405611ED2DFD8A453882A /* Build configuration list for PBXProject "GemmaChat" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 3DA8B755C3483AE934AFD4A9;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A3833EA86427309AF8E4E6E1 /* XCRemoteSwiftPackageReference "llama.swift" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 20B97DB073748D8AA78F3D84 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				FE4756A868FB061E8E2BCAED /* GemmaChat */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		40BC2699CBA4970D3CF2A9FA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				434F1C8A1E7E47C633A001B2 /* ChatMessage.swift in Sources */,
+				9FAB898F1BE20CAE7B34DC8D /* ChatView.swift in Sources */,
+				0EF5F0A7D09591A844EC8DF4 /* GemmaChatApp.swift in Sources */,
+				4EE2540DCE4B08B487E5BA30 /* InputBar.swift in Sources */,
+				4931830E2F56D39E5A0149BC /* LlamaService.swift in Sources */,
+				35C03FF0BCC7DEF24DB101F0 /* MessageBubble.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		131CB6228B760D805296EB77 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = GemmaChat/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.nova.gemmachat;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		1A18C86CE989655FCF107194 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		423934B7380C288E041FA91D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		F55F863DB038E266FDCE9494 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = GemmaChat/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.nova.gemmachat;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		04184034176D3B68C329A079 /* Build configuration list for PBXNativeTarget "GemmaChat" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F55F863DB038E266FDCE9494 /* Debug */,
+				131CB6228B760D805296EB77 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		69B405611ED2DFD8A453882A /* Build configuration list for PBXProject "GemmaChat" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A18C86CE989655FCF107194 /* Debug */,
+				423934B7380C288E041FA91D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A3833EA86427309AF8E4E6E1 /* XCRemoteSwiftPackageReference "llama.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mattt/llama.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.8760.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E8BDD9D1277C86A402BFB994 /* LlamaSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A3833EA86427309AF8E4E6E1 /* XCRemoteSwiftPackageReference "llama.swift" */;
+			productName = LlamaSwift;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = BDE7A0DFB1AE8E7D30DB3E75 /* Project object */;
+}
