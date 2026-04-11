@@ -76,23 +76,97 @@ struct ChatView: View {
         }
     }
 
+    @ViewBuilder
     private var modelStatusBar: some View {
-        HStack(spacing: 8) {
+        VStack(spacing: 8) {
             if viewModel.llama.isLoading {
-                ProgressView()
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("모델 로딩 중...")
+                }
+            } else if viewModel.downloader.isDownloading {
+                // Download progress
+                VStack(spacing: 6) {
+                    HStack {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundStyle(.blue)
+                        Text("모델 다운로드 중...")
+                            .font(.caption)
+                        Spacer()
+                        Text(String(format: "%.0f / %.0f MB", viewModel.downloader.downloadedMB, viewModel.downloader.totalMB))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    ProgressView(value: viewModel.downloader.progress)
+                        .tint(.blue)
+                    HStack {
+                        Text(String(format: "%.1f%%", viewModel.downloader.progress * 100))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("취소") {
+                            viewModel.cancelDownload()
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                    }
+                }
+            } else if let error = viewModel.downloader.error {
+                // Download error
+                VStack(spacing: 6) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text(error)
+                            .font(.caption)
+                            .lineLimit(2)
+                    }
+                    Button {
+                        viewModel.startDownload()
+                    } label: {
+                        Label("다시 시도", systemImage: "arrow.clockwise")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
                     .controlSize(.small)
-                Text("모델 로딩 중...")
+                }
             } else if let error = viewModel.llama.loadError {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-                Text(error)
-                    .lineLimit(2)
-                    .font(.caption)
+                // Model load error
+                VStack(spacing: 6) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                        Text(error)
+                            .lineLimit(2)
+                            .font(.caption)
+                    }
+                    Button {
+                        viewModel.startDownload()
+                    } label: {
+                        Label("모델 다운로드 (~3.2GB)", systemImage: "arrow.down.circle")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
             } else {
-                Image(systemName: "arrow.down.circle")
-                    .foregroundStyle(.blue)
-                Text("모델 파일을 앱 Documents에 넣어주세요")
-                    .font(.caption)
+                // No model found - show download button
+                VStack(spacing: 6) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.down.circle")
+                            .foregroundStyle(.blue)
+                        Text("Gemma 4 E2B 모델이 필요합니다")
+                            .font(.caption)
+                    }
+                    Button {
+                        viewModel.startDownload()
+                    } label: {
+                        Label("모델 다운로드 (~3.2GB)", systemImage: "arrow.down.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -111,38 +185,53 @@ final class ChatViewModel: ObservableObject {
     @Published var streamingText = ""
 
     let llama = LlamaService()
+    let downloader = ModelDownloadService()
     private var generateTask: Task<Void, Never>?
 
     private var modelPath: String? {
-        // Look for GGUF file in app's Documents directory
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let files = (try? FileManager.default.contentsOfDirectory(atPath: docs.path)) ?? []
         if let gguf = files.first(where: { $0.hasSuffix(".gguf") }) {
             return docs.appendingPathComponent(gguf).path
         }
-
-        // Also check bundle
         if let bundled = Bundle.main.path(forResource: "gemma-4-e2b", ofType: "gguf") {
             return bundled
         }
-
         return nil
     }
 
     func loadModelOnStart() async {
         guard let path = modelPath else {
-            llama.loadError = "GGUF 파일을 찾을 수 없습니다. Documents 폴더에 넣어주세요."
+            llama.loadError = "GGUF 파일을 찾을 수 없습니다"
             return
         }
         await llama.loadModel(at: path)
 
         if llama.modelLoaded {
-            // Add system greeting
             messages.append(ChatMessage(
                 role: .assistant,
                 content: "안녕하세요! Gemma 4 E2B 모델이 로드되었습니다. 무엇이든 물어보세요 🤖"
             ))
         }
+    }
+
+    func startDownload() {
+        Task {
+            if let fileURL = await downloader.download() {
+                // Model downloaded — load it
+                await llama.loadModel(at: fileURL.path)
+                if llama.modelLoaded {
+                    messages.append(ChatMessage(
+                        role: .assistant,
+                        content: "안녕하세요! Gemma 4 E2B 모델이 로드되었습니다. 무엇이든 물어보세요 🤖"
+                    ))
+                }
+            }
+        }
+    }
+
+    func cancelDownload() {
+        downloader.cancel()
     }
 
     func sendMessage() {

@@ -11,6 +11,7 @@
 		35C03FF0BCC7DEF24DB101F0 /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60D0BEA6428CC562BE8B8A7E /* MessageBubble.swift */; };
 		434F1C8A1E7E47C633A001B2 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC55261413C1D218C228973 /* ChatMessage.swift */; };
 		4931830E2F56D39E5A0149BC /* LlamaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF262539B31770450B0427D2 /* LlamaService.swift */; };
+		A7C3D1E4F5B6289A0C1D2E3F /* ModelDownloadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B8E9F0A1C2D3E4F5A6B7C8D /* ModelDownloadService.swift */; };
 		4EE2540DCE4B08B487E5BA30 /* InputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EA87EE3602AFDF40E17899F /* InputBar.swift */; };
 		9FAB898F1BE20CAE7B34DC8D /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 212C9030150A4483E72711EE /* ChatView.swift */; };
 		CCBFCB69EE6EBA9944C6F95B /* LlamaSwift in Frameworks */ = {isa = PBXBuildFile; productRef = E8BDD9D1277C86A402BFB994 /* LlamaSwift */; };
@@ -24,6 +25,7 @@
 		9EA87EE3602AFDF40E17899F /* InputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputBar.swift; sourceTree = "<group>"; };
 		B207F2CD85633210FFEA839E /* GemmaChatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GemmaChatApp.swift; sourceTree = "<group>"; };
 		CCC55261413C1D218C228973 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
+		7B8E9F0A1C2D3E4F5A6B7C8D /* ModelDownloadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadService.swift; sourceTree = "<group>"; };
 		DF262539B31770450B0427D2 /* LlamaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LlamaService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -89,6 +91,7 @@
 			isa = PBXGroup;
 			children = (
 				DF262539B31770450B0427D2 /* LlamaService.swift */,
+				7B8E9F0A1C2D3E4F5A6B7C8D /* ModelDownloadService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -163,6 +166,7 @@
 				4EE2540DCE4B08B487E5BA30 /* InputBar.swift in Sources */,
 				4931830E2F56D39E5A0149BC /* LlamaService.swift in Sources */,
 				35C03FF0BCC7DEF24DB101F0 /* MessageBubble.swift in Sources */,
+				A7C3D1E4F5B6289A0C1D2E3F /* ModelDownloadService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
