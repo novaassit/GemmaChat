@@ -81,35 +81,54 @@ final class LlamaService: ObservableObject {
                 // Format prompt in Gemma chat template
                 let prompt = self.formatPrompt(messages: messages)
 
-                // Tokenize
+                // Tokenize (buffer sized to full context so Korean/CJK syllable expansion fits)
                 let promptCStr = prompt.cString(using: .utf8)!
-                let maxTokenCount = Int32(prompt.count + 256)
+                let maxTokenCount = Int32(self.contextSize)
                 var tokens = [llama_token](repeating: 0, count: Int(maxTokenCount))
                 let nTokens = llama_tokenize(vocab, promptCStr, Int32(promptCStr.count - 1), &tokens, maxTokenCount, true, true)
 
                 guard nTokens > 0 else {
+                    // nTokens < 0 means buffer too small (conversation exceeds n_ctx); bail out.
                     continuation.finish()
                     return
                 }
 
                 tokens = Array(tokens.prefix(Int(nTokens)))
 
-                // Clear memory (KV cache)
+                // Clear memory (KV cache) for a fresh turn
                 llama_memory_clear(llama_get_memory(context), true)
 
-                // Create batch and process prompt
-                var batch = llama_batch_init(Int32(tokens.count), 0, 1)
+                // Allocate a batch sized for the chunk processor AND single-token generation
+                // (same batch is reused throughout). Capacity must be ≥ n_batch chunk size.
+                let chunkCapacity = 512
+                var batch = llama_batch_init(Int32(chunkCapacity), 0, 1)
 
-                for (i, token) in tokens.enumerated() {
-                    batch.n_tokens = Int32(i + 1)
-                    batch.token[i] = token
-                    batch.pos[i] = Int32(i)
-                    batch.n_seq_id[i] = 1
-                    batch.seq_id[i]![0] = 0
-                    batch.logits[i] = (i == tokens.count - 1) ? 1 : 0 // only last token needs logits
+                // Process the prompt in chunks of chunkCapacity to avoid exceeding n_batch,
+                // which would trip an internal assertion in llama.cpp and crash the app.
+                var promptPos = 0
+                var promptDecodeFailed = false
+                while promptPos < tokens.count {
+                    let thisChunk = min(chunkCapacity, tokens.count - promptPos)
+                    batch.n_tokens = Int32(thisChunk)
+                    for i in 0..<thisChunk {
+                        let globalIdx = promptPos + i
+                        batch.token[i] = tokens[globalIdx]
+                        batch.pos[i] = Int32(globalIdx)
+                        batch.n_seq_id[i] = 1
+                        batch.seq_id[i]![0] = 0
+                        // Only the very last token of the entire prompt needs logits for sampling.
+                        batch.logits[i] = (globalIdx == tokens.count - 1) ? 1 : 0
+                    }
+
+                    if llama_decode(context, batch) != 0 {
+                        promptDecodeFailed = true
+                        break
+                    }
+
+                    promptPos += thisChunk
                 }
 
-                if llama_decode(context, batch) != 0 {
+                if promptDecodeFailed {
                     llama_batch_free(batch)
                     continuation.finish()
                     return
@@ -117,8 +136,22 @@ final class LlamaService: ObservableObject {
 
                 // Generate tokens one by one
                 var nCur = Int(nTokens)
+
+                // Build stop-token set: EOS/EOT from metadata + explicit <end_of_turn> lookup
+                // (some Gemma GGUFs don't set EOT metadata, so llama_vocab_eot() returns nothing useful)
+                var stopTokens = Set<llama_token>()
                 let eosToken = llama_vocab_eos(vocab)
+                if eosToken >= 0 { stopTokens.insert(eosToken) }
                 let eotToken = llama_vocab_eot(vocab)
+                if eotToken >= 0 { stopTokens.insert(eotToken) }
+
+                // Manually tokenize Gemma's turn-end marker to guarantee we recognize it
+                let endOfTurnStr = "<end_of_turn>"
+                var endOfTurnTokens = [llama_token](repeating: 0, count: 8)
+                let endOfTurnCount = llama_tokenize(vocab, endOfTurnStr, Int32(endOfTurnStr.utf8.count), &endOfTurnTokens, 8, false, true)
+                if endOfTurnCount == 1 {
+                    stopTokens.insert(endOfTurnTokens[0])
+                }
 
                 // Greedy sampler
                 let sampler = llama_sampler_chain_init(llama_sampler_chain_default_params())!
@@ -126,20 +159,66 @@ final class LlamaService: ObservableObject {
                 llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.9, 1))
                 llama_sampler_chain_add(sampler, llama_sampler_init_dist(UInt32.random(in: 0...UInt32.max)))
 
+                // Text-level stop filter: some Gemma GGUFs emit <end_of_turn> as plain text
+                // tokens instead of a single special token, so token-level stop alone isn't enough.
+                // We buffer emitted text and hold back any suffix that might be the start of a
+                // stop sequence, only yielding text that is definitely safe.
+                let stopSequences = ["<end_of_turn>", "<start_of_turn>"]
+                var pendingBuffer = ""
+                var textStopped = false
+
                 for _ in 0..<self.maxTokens {
                     let newTokenId = llama_sampler_sample(sampler, context, Int32(batch.n_tokens - 1))
 
-                    // Check for end of generation
-                    if newTokenId == eosToken || newTokenId == eotToken {
+                    // Token-level stop check
+                    if stopTokens.contains(newTokenId) || llama_vocab_is_eog(vocab, newTokenId) {
                         break
                     }
 
-                    // Decode token to text
+                    // Decode token to text (special=false hides any special tokens from user output)
                     var buf = [CChar](repeating: 0, count: 256)
-                    let len = llama_token_to_piece(vocab, newTokenId, &buf, Int32(buf.count), 0, true)
+                    let len = llama_token_to_piece(vocab, newTokenId, &buf, Int32(buf.count), 0, false)
                     if len > 0 {
                         let piece = String(cString: buf)
-                        continuation.yield(piece)
+                        pendingBuffer += piece
+
+                        // Full stop sequence found → yield text before it, then stop.
+                        var foundFullStop = false
+                        for stop in stopSequences {
+                            if let range = pendingBuffer.range(of: stop) {
+                                let safeText = String(pendingBuffer[..<range.lowerBound])
+                                if !safeText.isEmpty {
+                                    continuation.yield(safeText)
+                                }
+                                foundFullStop = true
+                                break
+                            }
+                        }
+                        if foundFullStop {
+                            textStopped = true
+                            break
+                        }
+
+                        // Hold back the longest suffix that matches any stop-sequence prefix.
+                        var holdback = 0
+                        for stop in stopSequences {
+                            let maxCheck = min(stop.count - 1, pendingBuffer.count)
+                            if maxCheck >= 1 {
+                                for i in 1...maxCheck {
+                                    let partial = String(stop.prefix(i))
+                                    if pendingBuffer.hasSuffix(partial) {
+                                        holdback = max(holdback, i)
+                                    }
+                                }
+                            }
+                        }
+
+                        if pendingBuffer.count > holdback {
+                            let yieldEnd = pendingBuffer.index(pendingBuffer.endIndex, offsetBy: -holdback)
+                            let yieldText = String(pendingBuffer[..<yieldEnd])
+                            continuation.yield(yieldText)
+                            pendingBuffer = String(pendingBuffer[yieldEnd...])
+                        }
                     }
 
                     // Prepare next batch (manual clear)
@@ -156,6 +235,13 @@ final class LlamaService: ObservableObject {
                     if llama_decode(context, batch) != 0 {
                         break
                     }
+                }
+
+                // Loop ended naturally (EOG/maxTokens) without a text-level stop hit → flush any
+                // remaining buffered text. If we exited via text-level stop, the trailing stop
+                // sequence was already discarded above.
+                if !textStopped && !pendingBuffer.isEmpty {
+                    continuation.yield(pendingBuffer)
                 }
 
                 llama_sampler_free(sampler)
