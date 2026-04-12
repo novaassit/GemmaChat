@@ -18,6 +18,11 @@ struct ChatView: View {
                                     .id(msg.id)
                             }
 
+                            if viewModel.isThinking {
+                                ThinkingIndicator()
+                                    .id("thinking")
+                            }
+
                             if !viewModel.streamingText.isEmpty {
                                 MessageBubble(
                                     message: ChatMessage(role: .assistant, content: viewModel.streamingText)
@@ -31,6 +36,13 @@ struct ChatView: View {
                     .onChange(of: viewModel.messages.count) {
                         withAnimation {
                             proxy.scrollTo(viewModel.messages.last?.id, anchor: .bottom)
+                        }
+                    }
+                    .onChange(of: viewModel.isThinking) {
+                        if viewModel.isThinking {
+                            withAnimation {
+                                proxy.scrollTo("thinking", anchor: .bottom)
+                            }
                         }
                     }
                     .onChange(of: viewModel.streamingText) {
@@ -112,6 +124,7 @@ final class ChatViewModel: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var inputText = ""
     @Published var streamingText = ""
+    @Published var isThinking = false
     @Published var showSettings = false
 
     let llama: LlamaService
@@ -158,6 +171,7 @@ final class ChatViewModel: ObservableObject {
 
         inputText = ""
         messages.append(ChatMessage(role: .user, content: text))
+        isThinking = true
 
         processTask = Task {
             streamingText = ""
@@ -168,31 +182,22 @@ final class ChatViewModel: ObservableObject {
 
                 switch event {
                 case .textDelta(let text):
+                    isThinking = false
                     streamingText = text
 
-                case .toolCallStart(let name, let arguments):
-                    let argsStr = arguments.map { "\($0.key): \($0.value)" }.joined(separator: ", ")
-                    messages.append(ChatMessage(
-                        role: .assistant,
-                        content: argsStr.isEmpty ? name : "\(name)(\(argsStr))",
-                        kind: .toolCall(name: name)
-                    ))
-
-                case .toolCallResult(let name, let success, let output):
-                    messages.append(ChatMessage(
-                        role: .assistant,
-                        content: output,
-                        kind: .toolResult(name: name, success: success)
-                    ))
+                case .toolCallStart, .toolCallResult:
+                    break
 
                 case .actionRequired(let action):
+                    isThinking = false
                     pendingAction = action
 
                 case .error(let error):
+                    isThinking = false
                     messages.append(ChatMessage(role: .assistant, content: error))
 
                 case .finished:
-                    break
+                    isThinking = false
                 }
             }
 
@@ -209,6 +214,7 @@ final class ChatViewModel: ObservableObject {
 
     func stopGenerating() {
         processTask?.cancel()
+        isThinking = false
         if !streamingText.isEmpty {
             messages.append(ChatMessage(role: .assistant, content: streamingText))
             streamingText = ""
@@ -218,6 +224,7 @@ final class ChatViewModel: ObservableObject {
     func clearChat() {
         messages.removeAll()
         streamingText = ""
+        isThinking = false
     }
 
     func reloadModel() {

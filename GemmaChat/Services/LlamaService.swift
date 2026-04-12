@@ -160,7 +160,10 @@ final class LlamaService: ObservableObject {
                 llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.9, 1))
                 llama_sampler_chain_add(sampler, llama_sampler_init_dist(UInt32.random(in: 0...UInt32.max)))
 
-                let stopSequences = ["<end_of_turn>", "<start_of_turn>"]
+                let stopSequences = [
+                    "<end_of_turn>", "<start_of_turn>",
+                    "<end_of_of_turn>", "<|end|>", "<end_turn>"
+                ]
                 var pendingBuffer = ""
                 var textStopped = false
 
