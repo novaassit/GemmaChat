@@ -22,5 +22,26 @@
     <true/>
     <key>UILaunchScreen</key>
     <dict/>
+    <key>NSContactsUsageDescription</key>
+    <string>AI 비서가 연락처를 검색하고 추가하기 위해 접근 권한이 필요합니다.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>AI 비서가 미리알림을 생성하기 위해 접근 권한이 필요합니다.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>AI 비서가 캘린더 일정을 확인하고 추가하기 위해 접근 권한이 필요합니다.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>AI 비서가 현재 위치 기반 길안내를 제공하기 위해 위치 권한이 필요합니다.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>AI 비서가 사진을 검색하고 공유하기 위해 사진 라이브러리 접근 권한이 필요합니다.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>AI 비서가 카메라를 사용하기 위해 접근 권한이 필요합니다.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>AI 비서가 음성 입력을 처리하기 위해 마이크 접근 권한이 필요합니다.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>AI 비서가 음성을 텍스트로 변환하기 위해 음성 인식 권한이 필요합니다.</string>
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>nmap</string>
+        <string>tmap</string>
+    </array>
 </dict>
 </plist>

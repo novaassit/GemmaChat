@@ -6,12 +6,10 @@ struct ChatView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Status bar
                 if !viewModel.llama.modelLoaded {
                     modelStatusBar
                 }
 
-                // Messages
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 12) {
@@ -20,7 +18,6 @@ struct ChatView: View {
                                     .id(msg.id)
                             }
 
-                            // Streaming response
                             if !viewModel.streamingText.isEmpty {
                                 MessageBubble(
                                     message: ChatMessage(role: .assistant, content: viewModel.streamingText)
@@ -45,16 +42,15 @@ struct ChatView: View {
 
                 Divider()
 
-                // Input bar
                 InputBar(
                     text: $viewModel.inputText,
-                    isGenerating: viewModel.llama.isGenerating,
+                    isGenerating: viewModel.agent.isProcessing,
                     isDisabled: !viewModel.llama.modelLoaded,
                     onSend: { viewModel.sendMessage() },
                     onStop: { viewModel.stopGenerating() }
                 )
             }
-            .navigationTitle("Gemma Chat")
+            .navigationTitle("Gemma Assistant")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -65,10 +61,17 @@ struct ChatView: View {
                         Button("모델 다시 로드", systemImage: "arrow.clockwise") {
                             viewModel.reloadModel()
                         }
+                        Divider()
+                        Button("설정", systemImage: "gear") {
+                            viewModel.showSettings = true
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
                 }
+            }
+            .sheet(isPresented: $viewModel.showSettings) {
+                SettingsView()
             }
             .task {
                 await viewModel.loadModelOnStart()
@@ -109,23 +112,28 @@ final class ChatViewModel: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var inputText = ""
     @Published var streamingText = ""
+    @Published var showSettings = false
 
-    let llama = LlamaService()
-    private var generateTask: Task<Void, Never>?
+    let llama: LlamaService
+    let agent: AgentService
+
+    private var processTask: Task<Void, Never>?
+
+    init() {
+        let llamaService = LlamaService()
+        self.llama = llamaService
+        self.agent = AgentService(llama: llamaService)
+    }
 
     private var modelPath: String? {
-        // Look for GGUF file in app's Documents directory
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let files = (try? FileManager.default.contentsOfDirectory(atPath: docs.path)) ?? []
         if let gguf = files.first(where: { $0.hasSuffix(".gguf") }) {
             return docs.appendingPathComponent(gguf).path
         }
-
-        // Also check bundle
         if let bundled = Bundle.main.path(forResource: "gemma-4-e2b", ofType: "gguf") {
             return bundled
         }
-
         return nil
     }
 
@@ -137,10 +145,9 @@ final class ChatViewModel: ObservableObject {
         await llama.loadModel(at: path)
 
         if llama.modelLoaded {
-            // Add system greeting
             messages.append(ChatMessage(
                 role: .assistant,
-                content: "안녕하세요! Gemma 4 E2B 모델이 로드되었습니다. 무엇이든 물어보세요 🤖"
+                content: "안녕하세요! Gemma AI 비서입니다. 앱 실행, 알림 설정, 길 안내 등 다양한 작업을 도와드릴 수 있어요. 무엇을 해드릴까요?"
             ))
         }
     }
@@ -152,25 +159,56 @@ final class ChatViewModel: ObservableObject {
         inputText = ""
         messages.append(ChatMessage(role: .user, content: text))
 
-        generateTask = Task {
+        processTask = Task {
             streamingText = ""
-            var fullResponse = ""
+            var pendingAction: ToolAction?
 
-            for await piece in llama.generate(messages: messages) {
+            for await event in agent.process(messages: messages) {
                 if Task.isCancelled { break }
-                streamingText += piece
-                fullResponse += piece
+
+                switch event {
+                case .textDelta(let text):
+                    streamingText = text
+
+                case .toolCallStart(let name, let arguments):
+                    let argsStr = arguments.map { "\($0.key): \($0.value)" }.joined(separator: ", ")
+                    messages.append(ChatMessage(
+                        role: .assistant,
+                        content: argsStr.isEmpty ? name : "\(name)(\(argsStr))",
+                        kind: .toolCall(name: name)
+                    ))
+
+                case .toolCallResult(let name, let success, let output):
+                    messages.append(ChatMessage(
+                        role: .assistant,
+                        content: output,
+                        kind: .toolResult(name: name, success: success)
+                    ))
+
+                case .actionRequired(let action):
+                    pendingAction = action
+
+                case .error(let error):
+                    messages.append(ChatMessage(role: .assistant, content: error))
+
+                case .finished:
+                    break
+                }
             }
 
-            if !fullResponse.isEmpty {
-                messages.append(ChatMessage(role: .assistant, content: fullResponse))
+            if !streamingText.isEmpty {
+                messages.append(ChatMessage(role: .assistant, content: streamingText))
+                streamingText = ""
             }
-            streamingText = ""
+
+            if case .openURL(let url) = pendingAction {
+                await UIApplication.shared.open(url)
+            }
         }
     }
 
     func stopGenerating() {
-        generateTask?.cancel()
+        processTask?.cancel()
         if !streamingText.isEmpty {
             messages.append(ChatMessage(role: .assistant, content: streamingText))
             streamingText = ""
