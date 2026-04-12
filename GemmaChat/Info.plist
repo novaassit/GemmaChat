@@ -22,6 +22,10 @@
     <true/>
     <key>UILaunchScreen</key>
     <dict/>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
     <key>NSContactsUsageDescription</key>
     <string>AI 비서가 연락처를 검색하고 추가하기 위해 접근 권한이 필요합니다.</string>
     <key>NSRemindersFullAccessUsageDescription</key>

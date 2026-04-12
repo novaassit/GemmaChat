@@ -44,6 +44,8 @@ final class ToolRegistry {
         registry.register(FetchInfoTool())
         registry.register(ReadCalendarTool())
         registry.register(CreateCalendarEventTool())
+        registry.register(SaveMemoTool())
+        registry.register(ReadMemoTool())
         return registry
     }
 }

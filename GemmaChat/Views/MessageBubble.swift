@@ -132,6 +132,8 @@ struct MessageBubble: View {
         case "fetch_info": return "globe"
         case "read_calendar": return "calendar"
         case "create_event": return "calendar.badge.plus"
+        case "save_memo": return "square.and.pencil"
+        case "read_memo": return "doc.text"
         default: return "wrench"
         }
     }
@@ -155,6 +157,8 @@ struct MessageBubble: View {
         case "fetch_info": return "정보 검색"
         case "read_calendar": return "일정 확인"
         case "create_event": return "일정 추가"
+        case "save_memo": return "메모 저장"
+        case "read_memo": return "메모 읽기"
         default: return name
         }
     }

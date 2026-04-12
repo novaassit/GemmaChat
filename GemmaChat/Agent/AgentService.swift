@@ -140,7 +140,8 @@ final class AgentService: ObservableObject {
             "open_app", "web_search", "open_maps", "send_message", "make_call",
             "open_settings", "run_shortcut", "get_datetime", "get_device_info",
             "clipboard", "create_reminder", "set_brightness", "search_contacts",
-            "add_contact", "fetch_info", "read_calendar", "create_event"
+            "add_contact", "fetch_info", "read_calendar", "create_event",
+            "save_memo", "read_memo"
         ])
 
         // Match: tool_name(args) at any position in the response

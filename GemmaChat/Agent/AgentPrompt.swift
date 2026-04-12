@@ -25,6 +25,8 @@ enum AgentPrompt {
         set_brightness(level: 0.0~1.0) - 화면 밝기
         open_settings(section: wifi) - 설정 열기
         run_shortcut(name: 이름) - 단축어 실행
+        save_memo(title: 제목, content: 내용) - 메모 저장. 파일 앱에서 확인 가능
+        read_memo(title: 제목) - 저장된 메모 읽기. title 생략하면 목록 표시
 
         Examples:
         User: 김철수 전화번호가 뭐야
@@ -80,6 +82,12 @@ enum AgentPrompt {
 
         User: 내일 오후 2시에 팀 미팅 잡아줘
         create_event(title: 팀 미팅, date: 2026-04-13 14:00)
+
+        User: 이 결과를 메모장에 저장해줘
+        save_memo(title: 검색결과, content: 저장할 내용 전체)
+
+        User: 저장된 메모 보여줘
+        read_memo()
 
         User: 오늘 기분이 어때?
         저는 AI라서 기분은 없지만, 도움이 필요하시면 말씀해주세요!
