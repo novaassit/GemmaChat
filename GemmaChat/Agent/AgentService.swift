@@ -28,7 +28,8 @@ final class AgentService: ObservableObject {
                 )
 
                 var iteration = 0
-                var reachedLimit = false
+                var lastToolOutput: String?
+                var hasTextResponse = false
 
                 while iteration < self.maxToolIterations {
                     iteration += 1
@@ -48,6 +49,7 @@ final class AgentService: ObservableObject {
 
                     if !parsed.text.isEmpty {
                         continuation.yield(.textDelta(parsed.text))
+                        hasTextResponse = true
                     }
 
                     guard let toolCall = parsed.toolCall else {
@@ -74,17 +76,27 @@ final class AgentService: ObservableObject {
 
                     if result.action != .none {
                         continuation.yield(.actionRequired(result.action))
-                    }
-
-                    // For data-returning tools (no URL action), show the result directly
-                    // instead of re-calling the LLM, which often produces empty responses.
-                    if result.action == .none && result.success {
-                        continuation.yield(.textDelta(result.output))
                         break
                     }
 
-                    // For URL-opening tools, no need to re-call LLM either.
-                    break
+                    lastToolOutput = result.output
+                    hasTextResponse = false
+
+                    conversationMessages.append(ChatMessage(
+                        role: .assistant,
+                        content: fullResponse
+                    ))
+                    conversationMessages.append(ChatMessage(
+                        role: .system,
+                        content: AgentPrompt.toolResultPrompt(
+                            toolName: toolCall.name,
+                            result: result
+                        )
+                    ))
+                }
+
+                if !hasTextResponse, let fallback = lastToolOutput {
+                    continuation.yield(.textDelta(fallback))
                 }
 
                 continuation.yield(.finished)
