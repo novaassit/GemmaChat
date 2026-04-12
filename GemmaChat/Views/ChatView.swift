@@ -6,7 +6,7 @@ struct ChatView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if !viewModel.llama.modelLoaded {
+                if !viewModel.activeProvider.isReady {
                     modelStatusBar
                 }
 
@@ -57,7 +57,7 @@ struct ChatView: View {
                 InputBar(
                     text: $viewModel.inputText,
                     isGenerating: viewModel.agent.isProcessing,
-                    isDisabled: !viewModel.llama.modelLoaded,
+                    isDisabled: !viewModel.activeProvider.isReady,
                     onSend: { viewModel.sendMessage() },
                     onStop: { viewModel.stopGenerating() }
                 )
@@ -82,7 +82,9 @@ struct ChatView: View {
                     }
                 }
             }
-            .sheet(isPresented: $viewModel.showSettings) {
+            .sheet(isPresented: $viewModel.showSettings, onDismiss: {
+                viewModel.applySettings()
+            }) {
                 SettingsView()
             }
             .task {
@@ -93,21 +95,44 @@ struct ChatView: View {
 
     private var modelStatusBar: some View {
         HStack(spacing: 8) {
-            if viewModel.llama.isLoading {
-                ProgressView()
-                    .controlSize(.small)
-                Text("모델 로딩 중...")
-            } else if let error = viewModel.llama.loadError {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-                Text(error)
-                    .lineLimit(2)
-                    .font(.caption)
+            if let local = viewModel.activeProvider as? LlamaService {
+                if local.isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("모델 로딩 중...")
+                            .font(.caption.bold())
+                        Text("잠시 기다려주세요. 처음 로드 시 시간이 걸릴 수 있습니다.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let error = local.loadError {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    Text(error)
+                        .lineLimit(2)
+                        .font(.caption)
+                } else {
+                    Image(systemName: "doc.badge.arrow.up")
+                        .foregroundStyle(.blue)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("모델 파일 필요")
+                            .font(.caption.bold())
+                        Text("GGUF 파일을 파일 앱 → GemmaChat에 넣어주세요")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             } else {
-                Image(systemName: "arrow.down.circle")
-                    .foregroundStyle(.blue)
-                Text("모델 파일을 앱 Documents에 넣어주세요")
-                    .font(.caption)
+                Image(systemName: "icloud.slash")
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("API 연결 필요")
+                        .font(.caption.bold())
+                    Text("설정에서 Endpoint와 모델을 입력해주세요")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -127,15 +152,18 @@ final class ChatViewModel: ObservableObject {
     @Published var isThinking = false
     @Published var showSettings = false
 
-    let llama: LlamaService
-    let agent: AgentService
+    private let localProvider = LlamaService()
+    private let remoteProvider = RemoteLLMProvider()
+    private(set) var agent: AgentService!
+
+    var activeProvider: any LLMProvider {
+        AppSettings.shared.llmMode == .remote ? remoteProvider : localProvider
+    }
 
     private var processTask: Task<Void, Never>?
 
     init() {
-        let llamaService = LlamaService()
-        self.llama = llamaService
-        self.agent = AgentService(llama: llamaService)
+        self.agent = AgentService(provider: localProvider)
     }
 
     private var modelPath: String? {
@@ -151,13 +179,20 @@ final class ChatViewModel: ObservableObject {
     }
 
     func loadModelOnStart() async {
-        guard let path = modelPath else {
-            llama.loadError = "GGUF 파일을 찾을 수 없습니다. Documents 폴더에 넣어주세요."
-            return
-        }
-        await llama.loadModel(at: path)
+        let settings = AppSettings.shared
+        agent = AgentService(provider: activeProvider)
 
-        if llama.modelLoaded {
+        if settings.llmMode == .remote {
+            // RemoteLLMProvider reads from AppSettings directly
+        } else {
+            guard let path = modelPath else {
+                localProvider.loadError = "GGUF 파일을 찾을 수 없습니다. Documents 폴더에 넣어주세요."
+                return
+            }
+            await localProvider.loadModel(at: path)
+        }
+
+        if activeProvider.isReady {
             messages.append(ChatMessage(
                 role: .assistant,
                 content: "안녕하세요! Gemma AI 비서입니다. 앱 실행, 알림 설정, 길 안내 등 다양한 작업을 도와드릴 수 있어요. 무엇을 해드릴까요?"
@@ -228,8 +263,16 @@ final class ChatViewModel: ObservableObject {
     }
 
     func reloadModel() {
-        llama.unload()
+        localProvider.unload()
         Task { await loadModelOnStart() }
+    }
+
+    func applySettings() {
+        agent = AgentService(provider: activeProvider)
+        if !activeProvider.isReady && AppSettings.shared.llmMode == .local {
+            Task { await loadModelOnStart() }
+        }
+        objectWillChange.send()
     }
 }
 

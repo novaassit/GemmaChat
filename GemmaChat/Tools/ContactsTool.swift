@@ -43,21 +43,24 @@ struct SearchContactsTool: Tool {
             for contact in contacts.prefix(5) {
                 let fullName = [contact.familyName, contact.givenName]
                     .filter { !$0.isEmpty }.joined(separator: " ")
-                var info = "[\(fullName)]"
+                var lines = ["**\(fullName)**"]
 
-                let phones = contact.phoneNumbers.map { $0.value.stringValue }
-                if !phones.isEmpty {
-                    info += " 전화: \(phones.joined(separator: ", "))"
+                for phone in contact.phoneNumbers {
+                    let number = phone.value.stringValue
+                    let cleaned = number.replacingOccurrences(of: " ", with: "")
+                    lines.append("전화: [\(number)](tel:\(cleaned))")
                 }
 
-                let emails = contact.emailAddresses.map { $0.value as String }
-                if !emails.isEmpty {
-                    info += " 이메일: \(emails.joined(separator: ", "))"
+                for email in contact.emailAddresses {
+                    let addr = email.value as String
+                    lines.append("메일: [\(addr)](mailto:\(addr))")
                 }
 
                 if !contact.organizationName.isEmpty {
-                    info += " 회사: \(contact.organizationName)"
+                    lines.append("회사: \(contact.organizationName)")
                 }
+
+                let info = lines.joined(separator: "\n")
 
                 results.append(info)
             }

@@ -2,10 +2,11 @@ import Foundation
 import llama
 
 @MainActor
-final class LlamaService: ObservableObject {
+final class LlamaService: ObservableObject, LLMProvider {
 
     @Published var isLoading = false
     @Published var isGenerating = false
+    var isReady: Bool { modelLoaded }
     @Published var loadError: String?
     @Published var modelLoaded = false
 

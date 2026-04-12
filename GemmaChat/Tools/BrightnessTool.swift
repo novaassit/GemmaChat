@@ -2,26 +2,33 @@ import UIKit
 
 struct BrightnessTool: Tool {
     let name = "set_brightness"
-    let description = "Gets or sets the screen brightness level (0.0 to 1.0)"
+    let description = "Gets or sets screen brightness. Accepts 0-100 (percent) or 0.0-1.0"
     let parameters = [
-        ToolParameter("level", "Brightness level from 0.0 (darkest) to 1.0 (brightest)", required: false)
+        ToolParameter("level", "Brightness: 0~100 percent, or 0.0~1.0", required: false)
     ]
 
     func execute(arguments: [String: String]) async -> ToolResult {
-        if let levelStr = arguments["level"], !levelStr.isEmpty {
-            guard let level = Float(levelStr), level >= 0.0, level <= 1.0 else {
-                return .fail("Brightness level must be a number between 0.0 and 1.0")
+        if let levelStr = arguments["level"]?.trimmingCharacters(in: .whitespaces),
+           !levelStr.isEmpty {
+            let cleaned = levelStr.replacingOccurrences(of: "%", with: "")
+            guard var level = Float(cleaned) else {
+                return .fail("밝기 값을 인식할 수 없습니다: \(levelStr)")
             }
+
+            if level > 1.0 { level /= 100.0 }
+            level = max(0.0, min(1.0, level))
+
+            let before = await MainActor.run { Int(UIScreen.main.brightness * 100) }
 
             await MainActor.run {
                 UIScreen.main.brightness = CGFloat(level)
             }
-            return .ok("Brightness set to \(Int(level * 100))%")
+
+            let after = Int(level * 100)
+            return .ok("밝기 변경: \(before)% → \(after)%")
         } else {
-            let current = await MainActor.run {
-                UIScreen.main.brightness
-            }
-            return .ok("Current brightness: \(Int(current * 100))%")
+            let current = await MainActor.run { Int(UIScreen.main.brightness * 100) }
+            return .ok("현재 밝기: \(current)%")
         }
     }
 }

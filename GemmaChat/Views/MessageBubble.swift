@@ -23,7 +23,7 @@ struct MessageBubble: View {
             if isUser { Spacer(minLength: 60) }
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                Text(message.content)
+                markdownText(message.content)
                     .textSelection(.enabled)
                     .font(.body)
                     .foregroundStyle(isUser ? .white : .primary)
@@ -109,6 +109,16 @@ struct MessageBubble: View {
         .background((success ? Color.green : Color.red).opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.trailing, 60)
+    }
+
+    // MARK: - Markdown Rendering
+
+    private func markdownText(_ content: String) -> Text {
+        if let attributed = try? AttributedString(markdown: content,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+            return Text(attributed)
+        }
+        return Text(content)
     }
 
     // MARK: - Tool Metadata

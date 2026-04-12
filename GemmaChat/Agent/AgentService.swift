@@ -2,15 +2,15 @@ import Foundation
 
 @MainActor
 final class AgentService: ObservableObject {
-    let llama: LlamaService
+    let provider: any LLMProvider
     let toolRegistry: ToolRegistry
 
     @Published var isProcessing = false
 
     private let maxToolIterations = 5
 
-    init(llama: LlamaService, toolRegistry: ToolRegistry = .createDefault()) {
-        self.llama = llama
+    init(provider: any LLMProvider, toolRegistry: ToolRegistry = .createDefault()) {
+        self.provider = provider
         self.toolRegistry = toolRegistry
     }
 
@@ -35,7 +35,7 @@ final class AgentService: ObservableObject {
                     var fullResponse = ""
 
                     let stream = await MainActor.run {
-                        self.llama.generate(systemPrompt: systemPromptText, messages: conversationMessages)
+                        self.provider.generate(systemPrompt: systemPromptText, messages: conversationMessages)
                     }
                     for await piece in stream {
                         if Task.isCancelled { break }
