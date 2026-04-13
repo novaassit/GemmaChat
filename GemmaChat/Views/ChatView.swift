@@ -95,14 +95,19 @@ struct ChatView: View {
 
     private var modelStatusBar: some View {
         HStack(spacing: 8) {
-            if let local = viewModel.activeProvider as? LlamaService {
+            if viewModel.isCheckingModel {
+                ProgressView()
+                    .controlSize(.small)
+                Text("모델 확인 중...")
+                    .font(.caption)
+            } else if let local = viewModel.activeProvider as? LlamaService {
                 if local.isLoading {
                     ProgressView()
                         .controlSize(.small)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("모델 로딩 중...")
                             .font(.caption.bold())
-                        Text("잠시 기다려주세요. 처음 로드 시 시간이 걸릴 수 있습니다.")
+                        Text("잠시 기다려주세요")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -151,6 +156,7 @@ final class ChatViewModel: ObservableObject {
     @Published var streamingText = ""
     @Published var isThinking = false
     @Published var showSettings = false
+    @Published var isCheckingModel = true
 
     private let localProvider = LlamaService()
     private let remoteProvider = RemoteLLMProvider()
@@ -183,12 +189,14 @@ final class ChatViewModel: ObservableObject {
         agent = AgentService(provider: activeProvider)
 
         if settings.llmMode == .remote {
-            // RemoteLLMProvider reads from AppSettings directly
+            isCheckingModel = false
         } else {
             guard let path = modelPath else {
+                isCheckingModel = false
                 localProvider.loadError = "GGUF 파일을 찾을 수 없습니다. Documents 폴더에 넣어주세요."
                 return
             }
+            isCheckingModel = false
             await localProvider.loadModel(at: path)
         }
 
@@ -269,7 +277,14 @@ final class ChatViewModel: ObservableObject {
 
     func applySettings() {
         agent = AgentService(provider: activeProvider)
-        if !activeProvider.isReady && AppSettings.shared.llmMode == .local {
+        clearChat()
+        if activeProvider.isReady {
+            messages.append(ChatMessage(
+                role: .assistant,
+                content: "안녕하세요! Gemma AI 비서입니다. 무엇을 해드릴까요?"
+            ))
+        } else if AppSettings.shared.llmMode == .local {
+            isCheckingModel = true
             Task { await loadModelOnStart() }
         }
         objectWillChange.send()
