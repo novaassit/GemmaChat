@@ -1,5 +1,7 @@
 import Foundation
 import llama
+import os
+import UIKit
 
 @MainActor
 final class LlamaService: ObservableObject, LLMProvider {
@@ -9,6 +11,7 @@ final class LlamaService: ObservableObject, LLMProvider {
     var isReady: Bool { modelLoaded }
     @Published var loadError: String?
     @Published var modelLoaded = false
+    @Published var runtimeWarning: String?
 
     private var model: OpaquePointer?   // llama_model *
     private var context: OpaquePointer? // llama_context *
@@ -17,11 +20,102 @@ final class LlamaService: ObservableObject, LLMProvider {
     private let maxTokens = 512
     private let contextSize: UInt32 = 4096
 
+    // Runtime safety flags (written by notification observers, read by generation loop)
+    private let abortLock = NSLock()
+    nonisolated(unsafe) private var _shouldAbort = false
+    nonisolated(unsafe) private var _abortReason: String?
+
+    private var memoryWarningObserver: NSObjectProtocol?
+    private var thermalObserver: NSObjectProtocol?
+
+    // Timeout: abort a single turn if generation exceeds this many seconds
+    private let generationTimeoutSeconds: TimeInterval = 60
+
+    init() {
+        setupMonitoring()
+    }
+
+    private func setupMonitoring() {
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.requestAbort(reason: "메모리 부족 경고로 생성을 중단했습니다")
+            self?.clearKVCache()
+        }
+
+        thermalObserver = NotificationCenter.default.addObserver(
+            forName: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            let state = ProcessInfo.processInfo.thermalState
+            if state == .serious || state == .critical {
+                self?.requestAbort(reason: "기기가 과열되어 생성을 중단했습니다. 잠시 후 다시 시도해주세요")
+            }
+        }
+    }
+
+    private nonisolated func requestAbort(reason: String) {
+        abortLock.lock()
+        _shouldAbort = true
+        _abortReason = reason
+        abortLock.unlock()
+        Task { @MainActor in self.runtimeWarning = reason }
+    }
+
+    private nonisolated func shouldAbort() -> (Bool, String?) {
+        abortLock.lock()
+        defer { abortLock.unlock() }
+        return (_shouldAbort, _abortReason)
+    }
+
+    private nonisolated func resetAbort() {
+        abortLock.lock()
+        _shouldAbort = false
+        _abortReason = nil
+        abortLock.unlock()
+    }
+
+    private func clearKVCache() {
+        guard let context else { return }
+        llama_memory_clear(llama_get_memory(context), true)
+    }
+
     // MARK: - Model Loading
+
+    /// Pre-load memory check: refuse to load if available memory < model size + buffer.
+    /// Buffer accounts for KV cache (~500MB at n_ctx=4096) and Metal GPU buffers.
+    private static let memoryBufferBytes: UInt64 = 1_200_000_000 // 1.2GB
+
+    private func checkMemoryAvailable(modelPath: String) -> String? {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: modelPath)
+        guard let fileSize = (attrs?[.size] as? NSNumber)?.uint64Value, fileSize > 0 else {
+            return "모델 파일을 읽을 수 없습니다"
+        }
+
+        let available = UInt64(os_proc_available_memory())
+        let required = fileSize + Self.memoryBufferBytes
+
+        if available < required {
+            let availGB = Double(available) / 1_073_741_824.0
+            let needGB = Double(required) / 1_073_741_824.0
+            return String(
+                format: "메모리 부족: 필요 %.1fGB, 가용 %.1fGB\n다른 앱을 종료하거나 기기를 재시작한 뒤 다시 시도해주세요.",
+                needGB, availGB
+            )
+        }
+        return nil
+    }
 
     func loadModel(at path: String) async {
         isLoading = true
         loadError = nil
+
+        if let memoryError = checkMemoryAvailable(modelPath: path) {
+            loadError = memoryError
+            isLoading = false
+            return
+        }
 
         let result: (OpaquePointer?, OpaquePointer?, OpaquePointer?, String?) = await Task.detached(priority: .userInitiated) {
             llama_backend_init()
@@ -68,11 +162,28 @@ final class LlamaService: ObservableObject, LLMProvider {
                 return
             }
 
+            // Pre-check thermal state
+            let thermal = ProcessInfo.processInfo.thermalState
+            if thermal == .critical {
+                Task { @MainActor in
+                    self.runtimeWarning = "기기가 과열되어 생성을 시작할 수 없습니다. 잠시 후 다시 시도해주세요"
+                }
+                continuation.finish()
+                return
+            }
+
+            self.resetAbort()
+
             Task.detached(priority: .userInitiated) { [weak self] in
                 guard let self else { continuation.finish(); return }
 
-                await MainActor.run { self.isGenerating = true }
+                await MainActor.run {
+                    self.isGenerating = true
+                    self.runtimeWarning = nil
+                }
                 defer { Task { @MainActor in self.isGenerating = false } }
+
+                let startTime = Date()
 
                 // Build full prompt as a single string (safe, no tokenization split issues).
                 var prompt = ""
@@ -168,7 +279,23 @@ final class LlamaService: ObservableObject, LLMProvider {
                 var pendingBuffer = ""
                 var textStopped = false
 
-                for _ in 0..<self.maxTokens {
+                for tokenIndex in 0..<self.maxTokens {
+                    // Safety checks every token: memory warning, thermal, timeout
+                    let (abort, reason) = self.shouldAbort()
+                    if abort {
+                        if let reason { continuation.yield("\n\n[\(reason)]") }
+                        break
+                    }
+                    if tokenIndex % 16 == 0 {
+                        let elapsed = Date().timeIntervalSince(startTime)
+                        if elapsed > self.generationTimeoutSeconds {
+                            let msg = "생성 시간이 \(Int(self.generationTimeoutSeconds))초를 초과해 중단했습니다"
+                            await MainActor.run { self.runtimeWarning = msg }
+                            continuation.yield("\n\n[\(msg)]")
+                            break
+                        }
+                    }
+
                     let newTokenId = llama_sampler_sample(sampler, context, Int32(batch.n_tokens - 1))
 
                     if stopTokens.contains(newTokenId) || llama_vocab_is_eog(vocab, newTokenId) {
@@ -257,6 +384,8 @@ final class LlamaService: ObservableObject, LLMProvider {
     }
 
     deinit {
+        if let memoryWarningObserver { NotificationCenter.default.removeObserver(memoryWarningObserver) }
+        if let thermalObserver { NotificationCenter.default.removeObserver(thermalObserver) }
         if let context { llama_free(context) }
         if let model { llama_model_free(model) }
     }

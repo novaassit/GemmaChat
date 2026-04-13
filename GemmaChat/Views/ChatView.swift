@@ -10,6 +10,10 @@ struct ChatView: View {
                     modelStatusBar
                 }
 
+                if let warning = (viewModel.activeProvider as? LlamaService)?.runtimeWarning {
+                    runtimeWarningBar(warning)
+                }
+
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 12) {
@@ -91,6 +95,27 @@ struct ChatView: View {
                 await viewModel.loadModelOnStart()
             }
         }
+    }
+
+    private func runtimeWarningBar(_ message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.caption)
+                .lineLimit(2)
+            Spacer()
+            Button {
+                (viewModel.activeProvider as? LlamaService)?.runtimeWarning = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(Color.orange.opacity(0.15))
     }
 
     private var modelStatusBar: some View {
