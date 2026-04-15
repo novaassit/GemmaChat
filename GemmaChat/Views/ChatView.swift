@@ -195,6 +195,36 @@ final class ChatViewModel: ObservableObject {
 
     init() {
         self.agent = AgentService(provider: localProvider)
+
+        // Restore previous session if any
+        let restored = SessionStorage.load()
+        if !restored.isEmpty {
+            self.messages = restored
+            if SessionStorage.didCrashLastSession() {
+                self.messages.append(ChatMessage(
+                    role: .assistant,
+                    content: "⚠️ 이전 세션이 비정상 종료되었습니다. 메모리 절약을 위해 '대화 초기화'를 권장합니다."
+                ))
+            }
+        }
+        SessionStorage.markRunning()
+
+        // Persist messages on changes
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willResignActiveNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            SessionStorage.save(self.messages)
+            SessionStorage.markCleanExit()
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil, queue: .main
+        ) { _ in
+            SessionStorage.markRunning()
+        }
     }
 
     private var modelPath: String? {
@@ -225,7 +255,7 @@ final class ChatViewModel: ObservableObject {
             await localProvider.loadModel(at: path)
         }
 
-        if activeProvider.isReady {
+        if activeProvider.isReady && messages.isEmpty {
             messages.append(ChatMessage(
                 role: .assistant,
                 content: "안녕하세요! Gemma AI 비서입니다. 앱 실행, 알림 설정, 길 안내 등 다양한 작업을 도와드릴 수 있어요. 무엇을 해드릴까요?"
@@ -274,6 +304,8 @@ final class ChatViewModel: ObservableObject {
                 streamingText = ""
             }
 
+            persistSession()
+
             if case .openURL(let url) = pendingAction {
                 await UIApplication.shared.open(url)
             }
@@ -287,12 +319,18 @@ final class ChatViewModel: ObservableObject {
             messages.append(ChatMessage(role: .assistant, content: streamingText))
             streamingText = ""
         }
+        persistSession()
     }
 
     func clearChat() {
         messages.removeAll()
         streamingText = ""
         isThinking = false
+        SessionStorage.clear()
+    }
+
+    private func persistSession() {
+        SessionStorage.save(messages)
     }
 
     func reloadModel() {

@@ -83,25 +83,24 @@ final class LlamaService: ObservableObject, LLMProvider {
 
     // MARK: - Model Loading
 
-    /// Pre-load memory check: refuse to load if available memory < model size + buffer.
-    /// Buffer accounts for KV cache (~500MB at n_ctx=4096) and Metal GPU buffers.
-    private static let memoryBufferBytes: UInt64 = 1_200_000_000 // 1.2GB
+    /// Pre-load memory check.
+    /// With Metal GPU offload (n_gpu_layers=99), model weights live in GPU memory,
+    /// not in the app's jetsam-counted RAM. We only need enough for KV cache
+    /// (~500MB at n_ctx=4096), batch buffers, and runtime overhead.
+    private static let minRequiredMemoryBytes: UInt64 = 900_000_000 // 900MB
 
     private func checkMemoryAvailable(modelPath: String) -> String? {
-        let attrs = try? FileManager.default.attributesOfItem(atPath: modelPath)
-        guard let fileSize = (attrs?[.size] as? NSNumber)?.uint64Value, fileSize > 0 else {
-            return "모델 파일을 읽을 수 없습니다"
+        guard FileManager.default.fileExists(atPath: modelPath) else {
+            return "모델 파일을 찾을 수 없습니다"
         }
 
         let available = UInt64(os_proc_available_memory())
-        let required = fileSize + Self.memoryBufferBytes
-
-        if available < required {
-            let availGB = Double(available) / 1_073_741_824.0
-            let needGB = Double(required) / 1_073_741_824.0
+        if available < Self.minRequiredMemoryBytes {
+            let availMB = Double(available) / 1_048_576.0
+            let needMB = Double(Self.minRequiredMemoryBytes) / 1_048_576.0
             return String(
-                format: "메모리 부족: 필요 %.1fGB, 가용 %.1fGB\n다른 앱을 종료하거나 기기를 재시작한 뒤 다시 시도해주세요.",
-                needGB, availGB
+                format: "메모리 부족: 최소 %.0fMB 필요, 가용 %.0fMB\n다른 앱을 종료하거나 기기를 재시작해주세요.",
+                needMB, availMB
             )
         }
         return nil
