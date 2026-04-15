@@ -1,14 +1,17 @@
 import Foundation
 import llama
+import os
+import UIKit
 
-/// Wraps llama.cpp C API for Gemma 4 E2B inference on-device.
 @MainActor
-final class LlamaService: ObservableObject {
+final class LlamaService: ObservableObject, LLMProvider {
 
     @Published var isLoading = false
     @Published var isGenerating = false
+    var isReady: Bool { modelLoaded }
     @Published var loadError: String?
     @Published var modelLoaded = false
+    @Published var runtimeWarning: String?
 
     private var model: OpaquePointer?   // llama_model *
     private var context: OpaquePointer? // llama_context *
@@ -17,20 +20,107 @@ final class LlamaService: ObservableObject {
     private let maxTokens = 512
     private let contextSize: UInt32 = 4096
 
+    // Runtime safety flags (written by notification observers, read by generation loop)
+    private let abortLock = NSLock()
+    nonisolated(unsafe) private var _shouldAbort = false
+    nonisolated(unsafe) private var _abortReason: String?
+
+    private var memoryWarningObserver: NSObjectProtocol?
+    private var thermalObserver: NSObjectProtocol?
+
+    // Timeout: abort a single turn if generation exceeds this many seconds
+    private let generationTimeoutSeconds: TimeInterval = 60
+
+    init() {
+        setupMonitoring()
+    }
+
+    private func setupMonitoring() {
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.requestAbort(reason: "메모리 부족 경고로 생성을 중단했습니다")
+            self?.clearKVCache()
+        }
+
+        thermalObserver = NotificationCenter.default.addObserver(
+            forName: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            let state = ProcessInfo.processInfo.thermalState
+            if state == .serious || state == .critical {
+                self?.requestAbort(reason: "기기가 과열되어 생성을 중단했습니다. 잠시 후 다시 시도해주세요")
+            }
+        }
+    }
+
+    private nonisolated func requestAbort(reason: String) {
+        abortLock.lock()
+        _shouldAbort = true
+        _abortReason = reason
+        abortLock.unlock()
+        Task { @MainActor in self.runtimeWarning = reason }
+    }
+
+    private nonisolated func shouldAbort() -> (Bool, String?) {
+        abortLock.lock()
+        defer { abortLock.unlock() }
+        return (_shouldAbort, _abortReason)
+    }
+
+    private nonisolated func resetAbort() {
+        abortLock.lock()
+        _shouldAbort = false
+        _abortReason = nil
+        abortLock.unlock()
+    }
+
+    private func clearKVCache() {
+        guard let context else { return }
+        llama_memory_clear(llama_get_memory(context), true)
+    }
+
     // MARK: - Model Loading
+
+    /// Pre-load memory check.
+    /// With Metal GPU offload (n_gpu_layers=99), model weights live in GPU memory,
+    /// not in the app's jetsam-counted RAM. We only need enough for KV cache
+    /// (~500MB at n_ctx=4096), batch buffers, and runtime overhead.
+    private static let minRequiredMemoryBytes: UInt64 = 900_000_000 // 900MB
+
+    private func checkMemoryAvailable(modelPath: String) -> String? {
+        guard FileManager.default.fileExists(atPath: modelPath) else {
+            return "모델 파일을 찾을 수 없습니다"
+        }
+
+        let available = UInt64(os_proc_available_memory())
+        if available < Self.minRequiredMemoryBytes {
+            let availMB = Double(available) / 1_048_576.0
+            let needMB = Double(Self.minRequiredMemoryBytes) / 1_048_576.0
+            return String(
+                format: "메모리 부족: 최소 %.0fMB 필요, 가용 %.0fMB\n다른 앱을 종료하거나 기기를 재시작해주세요.",
+                needMB, availMB
+            )
+        }
+        return nil
+    }
 
     func loadModel(at path: String) async {
         isLoading = true
         loadError = nil
 
-        // Run heavy work off main
+        if let memoryError = checkMemoryAvailable(modelPath: path) {
+            loadError = memoryError
+            isLoading = false
+            return
+        }
+
         let result: (OpaquePointer?, OpaquePointer?, OpaquePointer?, String?) = await Task.detached(priority: .userInitiated) {
-            // Init backend once
             llama_backend_init()
 
-            // Model params (use Metal GPU on iOS)
             var modelParams = llama_model_default_params()
-            modelParams.n_gpu_layers = 99 // offload everything to Metal
+            modelParams.n_gpu_layers = 99
 
             guard let model = llama_model_load_from_file(path, modelParams) else {
                 return (nil, nil, nil, "모델 파일을 로드할 수 없습니다: \(path)")
@@ -38,7 +128,6 @@ final class LlamaService: ObservableObject {
 
             let vocab = llama_model_get_vocab(model)
 
-            // Context params
             var ctxParams = llama_context_default_params()
             ctxParams.n_ctx = self.contextSize
             ctxParams.n_batch = 512
@@ -63,7 +152,7 @@ final class LlamaService: ObservableObject {
 
     // MARK: - Chat Completion (streaming via AsyncStream)
 
-    func generate(messages: [ChatMessage]) -> AsyncStream<String> {
+    func generate(systemPrompt: String? = nil, messages: [ChatMessage]) -> AsyncStream<String> {
         AsyncStream { continuation in
             guard let model = self.model,
                   let context = self.context,
@@ -72,51 +161,78 @@ final class LlamaService: ObservableObject {
                 return
             }
 
+            // Pre-check thermal state
+            let thermal = ProcessInfo.processInfo.thermalState
+            if thermal == .critical {
+                Task { @MainActor in
+                    self.runtimeWarning = "기기가 과열되어 생성을 시작할 수 없습니다. 잠시 후 다시 시도해주세요"
+                }
+                continuation.finish()
+                return
+            }
+
+            self.resetAbort()
+
             Task.detached(priority: .userInitiated) { [weak self] in
                 guard let self else { continuation.finish(); return }
 
-                await MainActor.run { self.isGenerating = true }
+                await MainActor.run {
+                    self.isGenerating = true
+                    self.runtimeWarning = nil
+                }
                 defer { Task { @MainActor in self.isGenerating = false } }
 
-                // Format prompt in Gemma chat template
-                let prompt = self.formatPrompt(messages: messages)
+                let startTime = Date()
 
-                // Tokenize (buffer sized to full context so Korean/CJK syllable expansion fits)
+                // Build full prompt as a single string (safe, no tokenization split issues).
+                var prompt = ""
+                if let sys = systemPrompt {
+                    prompt += "<start_of_turn>system\n\(sys)<end_of_turn>\n"
+                }
+                for msg in messages {
+                    switch msg.role {
+                    case .user:
+                        prompt += "<start_of_turn>user\n\(msg.content)<end_of_turn>\n"
+                    case .assistant:
+                        prompt += "<start_of_turn>model\n\(msg.content)<end_of_turn>\n"
+                    case .system:
+                        prompt += "<start_of_turn>system\n\(msg.content)<end_of_turn>\n"
+                    }
+                }
+                prompt += "<start_of_turn>model\n"
+
+                // Tokenize entire prompt as one piece.
                 let promptCStr = prompt.cString(using: .utf8)!
                 let maxTokenCount = Int32(self.contextSize)
                 var tokens = [llama_token](repeating: 0, count: Int(maxTokenCount))
                 let nTokens = llama_tokenize(vocab, promptCStr, Int32(promptCStr.count - 1), &tokens, maxTokenCount, true, true)
 
                 guard nTokens > 0 else {
-                    // nTokens < 0 means buffer too small (conversation exceeds n_ctx); bail out.
                     continuation.finish()
                     return
                 }
 
                 tokens = Array(tokens.prefix(Int(nTokens)))
 
-                // Clear memory (KV cache) for a fresh turn
+                // Clear KV cache fully each turn.
                 llama_memory_clear(llama_get_memory(context), true)
 
-                // Allocate a batch sized for the chunk processor AND single-token generation
-                // (same batch is reused throughout). Capacity must be ≥ n_batch chunk size.
                 let chunkCapacity = 512
                 var batch = llama_batch_init(Int32(chunkCapacity), 0, 1)
 
-                // Process the prompt in chunks of chunkCapacity to avoid exceeding n_batch,
-                // which would trip an internal assertion in llama.cpp and crash the app.
                 var promptPos = 0
+                let tokensToProcess = tokens
                 var promptDecodeFailed = false
-                while promptPos < tokens.count {
-                    let thisChunk = min(chunkCapacity, tokens.count - promptPos)
+
+                while promptPos < tokensToProcess.count {
+                    let thisChunk = min(chunkCapacity, tokensToProcess.count - promptPos)
                     batch.n_tokens = Int32(thisChunk)
                     for i in 0..<thisChunk {
                         let globalIdx = promptPos + i
-                        batch.token[i] = tokens[globalIdx]
+                        batch.token[i] = tokensToProcess[promptPos + i]
                         batch.pos[i] = Int32(globalIdx)
                         batch.n_seq_id[i] = 1
                         batch.seq_id[i]![0] = 0
-                        // Only the very last token of the entire prompt needs logits for sampling.
                         batch.logits[i] = (globalIdx == tokens.count - 1) ? 1 : 0
                     }
 
@@ -134,18 +250,15 @@ final class LlamaService: ObservableObject {
                     return
                 }
 
-                // Generate tokens one by one
-                var nCur = Int(nTokens)
+                // --- Token generation loop ---
+                var nCur = tokens.count
 
-                // Build stop-token set: EOS/EOT from metadata + explicit <end_of_turn> lookup
-                // (some Gemma GGUFs don't set EOT metadata, so llama_vocab_eot() returns nothing useful)
                 var stopTokens = Set<llama_token>()
                 let eosToken = llama_vocab_eos(vocab)
                 if eosToken >= 0 { stopTokens.insert(eosToken) }
                 let eotToken = llama_vocab_eot(vocab)
                 if eotToken >= 0 { stopTokens.insert(eotToken) }
 
-                // Manually tokenize Gemma's turn-end marker to guarantee we recognize it
                 let endOfTurnStr = "<end_of_turn>"
                 var endOfTurnTokens = [llama_token](repeating: 0, count: 8)
                 let endOfTurnCount = llama_tokenize(vocab, endOfTurnStr, Int32(endOfTurnStr.utf8.count), &endOfTurnTokens, 8, false, true)
@@ -153,36 +266,47 @@ final class LlamaService: ObservableObject {
                     stopTokens.insert(endOfTurnTokens[0])
                 }
 
-                // Greedy sampler
                 let sampler = llama_sampler_chain_init(llama_sampler_chain_default_params())!
                 llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.7))
                 llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.9, 1))
                 llama_sampler_chain_add(sampler, llama_sampler_init_dist(UInt32.random(in: 0...UInt32.max)))
 
-                // Text-level stop filter: some Gemma GGUFs emit <end_of_turn> as plain text
-                // tokens instead of a single special token, so token-level stop alone isn't enough.
-                // We buffer emitted text and hold back any suffix that might be the start of a
-                // stop sequence, only yielding text that is definitely safe.
-                let stopSequences = ["<end_of_turn>", "<start_of_turn>"]
+                let stopSequences = [
+                    "<end_of_turn>", "<start_of_turn>",
+                    "<end_of_of_turn>", "<|end|>", "<end_turn>"
+                ]
                 var pendingBuffer = ""
                 var textStopped = false
 
-                for _ in 0..<self.maxTokens {
+                for tokenIndex in 0..<self.maxTokens {
+                    // Safety checks every token: memory warning, thermal, timeout
+                    let (abort, reason) = self.shouldAbort()
+                    if abort {
+                        if let reason { continuation.yield("\n\n[\(reason)]") }
+                        break
+                    }
+                    if tokenIndex % 16 == 0 {
+                        let elapsed = Date().timeIntervalSince(startTime)
+                        if elapsed > self.generationTimeoutSeconds {
+                            let msg = "생성 시간이 \(Int(self.generationTimeoutSeconds))초를 초과해 중단했습니다"
+                            await MainActor.run { self.runtimeWarning = msg }
+                            continuation.yield("\n\n[\(msg)]")
+                            break
+                        }
+                    }
+
                     let newTokenId = llama_sampler_sample(sampler, context, Int32(batch.n_tokens - 1))
 
-                    // Token-level stop check
                     if stopTokens.contains(newTokenId) || llama_vocab_is_eog(vocab, newTokenId) {
                         break
                     }
 
-                    // Decode token to text (special=false hides any special tokens from user output)
                     var buf = [CChar](repeating: 0, count: 256)
                     let len = llama_token_to_piece(vocab, newTokenId, &buf, Int32(buf.count), 0, false)
                     if len > 0 {
                         let piece = String(cString: buf)
                         pendingBuffer += piece
 
-                        // Full stop sequence found → yield text before it, then stop.
                         var foundFullStop = false
                         for stop in stopSequences {
                             if let range = pendingBuffer.range(of: stop) {
@@ -199,7 +323,6 @@ final class LlamaService: ObservableObject {
                             break
                         }
 
-                        // Hold back the longest suffix that matches any stop-sequence prefix.
                         var holdback = 0
                         for stop in stopSequences {
                             let maxCheck = min(stop.count - 1, pendingBuffer.count)
@@ -221,7 +344,6 @@ final class LlamaService: ObservableObject {
                         }
                     }
 
-                    // Prepare next batch (manual clear)
                     batch.n_tokens = 0
                     batch.n_tokens = 1
                     batch.token[0] = newTokenId
@@ -237,9 +359,6 @@ final class LlamaService: ObservableObject {
                     }
                 }
 
-                // Loop ended naturally (EOG/maxTokens) without a text-level stop hit → flush any
-                // remaining buffered text. If we exited via text-level stop, the trailing stop
-                // sequence was already discarded above.
                 if !textStopped && !pendingBuffer.isEmpty {
                     continuation.yield(pendingBuffer)
                 }
@@ -249,25 +368,6 @@ final class LlamaService: ObservableObject {
                 continuation.finish()
             }
         }
-    }
-
-    // MARK: - Gemma Chat Template
-
-    private nonisolated func formatPrompt(messages: [ChatMessage]) -> String {
-        var prompt = ""
-        for msg in messages {
-            switch msg.role {
-            case .user:
-                prompt += "<start_of_turn>user\n\(msg.content)<end_of_turn>\n"
-            case .assistant:
-                prompt += "<start_of_turn>model\n\(msg.content)<end_of_turn>\n"
-            case .system:
-                prompt += "<start_of_turn>system\n\(msg.content)<end_of_turn>\n"
-            }
-        }
-        // Signal model to start generating
-        prompt += "<start_of_turn>model\n"
-        return prompt
     }
 
     // MARK: - Cleanup
@@ -283,7 +383,8 @@ final class LlamaService: ObservableObject {
     }
 
     deinit {
-        // Note: deinit can't call unload() directly on MainActor
+        if let memoryWarningObserver { NotificationCenter.default.removeObserver(memoryWarningObserver) }
+        if let thermalObserver { NotificationCenter.default.removeObserver(thermalObserver) }
         if let context { llama_free(context) }
         if let model { llama_model_free(model) }
     }
